@@ -1,0 +1,404 @@
+---
+title: "BTCN"
+author: "Trinh Huyen"
+date: "2024-03-04"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#I. SỐ LIỆU THEO NGÀY - Chuỗi giá PVG
+## Nhập dữ liệu 
+```{r}
+library(ggplot2)
+library(FinTS)
+library(rugarch)
+library(vars)
+library(tseries)
+library(urca)
+library(forecast)
+library(Metrics)
+library(car)
+library(lmtest)
+library(tsutils)
+library(dplyr)
+Daily_PVG <- read.csv("E:/Time Series/BTL/TTH/Daily_Data.csv")
+save(Daily_PVG,file = "stockPVG.rda")
+View(Daily_PVG)
+attach(Daily_PVG)
+
+```
+ 
+## 1. Tính chuỗi log_return của PVG
+```{r}
+log_return<-diff(log(Price))*100
+#View(data.frame(log_return))
+log_return<-ts(log_return,start=c(1,1),frequency=1)
+```
+## 2. Thống kê mô tả
+```{r}
+summary(Price)
+summary(log_return)
+
+```
+## 3. Sử dụng các kĩ thuật và mô hình ARIMA để phân tích
+###3.1.Kiểm định tính dừng 
+```{r}
+plot.ts((Price),type = "l")
+plot(diff(Price),type="l")
+summary(ur.df(Price,type = "trend"))
+summary(ur.df(Price,type = "drift"))
+
+summary(ur.df(diff(Price),type = "trend"))
+summary(ur.df(diff(Price),type = "drift"))
+summary(ur.df(diff(Price),type = "none"))
+
+plot((log_return),type = "l")
+summary(ur.df(log_return,type = "trend"))
+summary(ur.df(log_return,type = "drift"))
+summary(ur.df(log_return,type = "none"))
+``` 
+- Chuỗi giá đóng cửa không dừng, chuỗi sai phân bậc 1 dừng. Vậy chuỗi giá dừng sai phân bậc 1: I(1)
+
+- Chuỗi log_return là chuỗi dừng
+###3.2. Xác định bậc ARIMA của chuỗi sai phân bậc 1 và bậc ARMA của chuỗi log_return
+```{r}
+
+acf(diff(Price),plot = TRUE)
+pacf(diff(Price),plot = TRUE)
+auto.arima(diff(Price),ic = "aic")
+
+acf(log_return,plot = TRUE)
+pacf(log_return,plot=TRUE)
+auto.arima(log_return,ic = "aic")
+
+```
+
+##4.Dự báo và tính sai số dự báo
+###4.1. Chuỗi giá
+#### Đánh giá mô hình 
+```{r}
+
+regPVG.arima110 <- arima(Price, order = c(1,1,0), include.mean = TRUE)
+summary(regPVG.arima110)
+
+regPVG.arima010 <- arima(Price, order = c(0,1,0), include.mean =  TRUE)
+summary(regPVG.arima010)
+regPVG.arima310 <- arima(Price, order = c(3,1,0), include.mean =  TRUE)
+summary(regPVG.arima310)
+
+```
+#### Kiểm định mô hình
+```{r}
+#Xem tính dừng qua nghiệm đơn vị
+autoplot(regPVG.arima310)
+#Kiểm định tính nhiễu trắng của phần dư
+checkresiduals(regPVG.arima310 )
+
+
+
+```
+
+#### Dự báo và tính sai số dự báo
+```{r}
+PVGf.arima110 <- forecast(regPVG.arima110, h=10)
+PVGf.arima110
+
+PVGf.arima010 <- forecast(regPVG.arima010, h=10)
+PVGf.arima010
+
+PVGf.arima310 <- forecast(regPVG.arima310, h=10)
+PVGf.arima310
+
+mape(X2024_price[1:10],PVGf.arima110$mean)
+mape(X2024_price[1:10],PVGf.arima010$mean)
+mape(X2024_price[1:10],PVGf.arima310$mean)
+```
+
+###4.2. Chuỗi log_return
+#### Đánh giá mô hình 
+```{r}
+regLR.arma11 <- arima(log_return, order = c(1,0,1), include.mean  = TRUE)
+summary(regLR.arma11)
+
+regLR.arma01<- arima(log_return, order = c(0,0,1), include.mean = TRUE)
+summary(regLR.arma01)
+
+regLR.arma10<- arima(log_return, order = c(1,0,0), include.mean = TRUE)
+summary(regLR.arma10)
+
+```
+#### Kiểm định mô hình
+```{r}
+#Xem tính dừng qua nghiệm đơn vị
+autoplot(regLR.arma11)
+autoplot(regLR.arma01)
+#Kiểm định tính nhiễu trắng của phần dư
+checkresiduals(regLR.arma11)
+checkresiduals(regLR.arma01)
+
+```
+
+#### Dự báo và tính sai số dự báo
+```{r}
+LRf.arma11 <- forecast(regLR.arma11, h=10)
+LRf.arma11
+
+LRf.arma01 <- forecast(regLR.arma01, h=10)
+LRf.arma01
+
+mape(X2024_LR[1:10],LRf.arma11$mean)
+mape(X2024_LR[1:10],LRf.arma01$mean)
+
+```
+
+##5.Dự báo log_return suy ra dự báo giá cổ phiếu
+```{r}
+LRf<-forecast(regLR.arma11 , h=10)
+lr<-exp(LRf$mean)
+
+n1<-lr[1]*Price[498]
+n2<-lr[2]*X2024_price[1]
+n3<-lr[3]*X2024_price[2]
+n4<-lr[4]*X2024_price[3]
+n5<-lr[5]*X2024_price[4]
+n6<-lr[6]*X2024_price[5]
+n7<-lr[7]*X2024_price[6]
+n8<-lr[8]*X2024_price[7]
+n9<-lr[9]*X2024_price[8]
+n10<-lr[10]*X2024_price[9]
+pricePVGf<-cbind(n1,n2,n3,n4,n5,n6,n7,n8,n9,n10)
+paste("Giá trị dự báo giá cổ phiếu 10 ngày đầu năm 2024 ")
+pricePVGf
+paste("Sai số dự báo")
+mape(pricePVGf,X2024_price[1:10])
+```
+
+```{r}
+LRf<-forecast(regLR.arma01, h=10)
+lr<-exp(LRf$mean)
+
+n1<-lr[1]*Price[498]
+n2<-lr[2]*X2024_price[1]
+n3<-lr[3]*X2024_price[2]
+n4<-lr[4]*X2024_price[3]
+n5<-lr[5]*X2024_price[4]
+n6<-lr[6]*X2024_price[5]
+n7<-lr[7]*X2024_price[6]
+n8<-lr[8]*X2024_price[7]
+n9<-lr[9]*X2024_price[8]
+n10<-lr[10]*X2024_price[9]
+pricePVGf<-cbind(n1,n2,n3,n4,n5,n6,n7,n8,n9,n10)
+paste("Giá trị dự báo giá cổ phiếu 10 ngày đầu năm 2024 ")
+pricePVGf
+paste("Sai số dự báo")
+mape(pricePVGf,X2024_price[1:10])
+
+```
+```{r}
+LRf<-forecast(regLR.arma10,h=10)
+lr<-exp(LRf$mean)
+
+n1<-lr[1]*Price[498]
+n2<-lr[2]*X2024_price[1]
+n3<-lr[3]*X2024_price[2]
+n4<-lr[4]*X2024_price[3]
+n5<-lr[5]*X2024_price[4]
+n6<-lr[6]*X2024_price[5]
+n7<-lr[7]*X2024_price[6]
+n8<-lr[8]*X2024_price[7]
+n9<-lr[9]*X2024_price[8]
+n10<-lr[10]*X2024_price[9]
+pricePVGf<-cbind(n1,n2,n3,n4,n5,n6,n7,n8,n9,n10)
+paste("Giá trị dự báo giá cổ phiếu 10 ngày đầu năm 2024 ")
+pricePVGf
+paste("Sai số dự báo")
+mape(pricePVGf,X2024_price[1:10])
+```
+
+##6. ARCH/GARCH cho mô hình ARIMA(0,0,1) của chuỗi log_return
+```{r}
+library(rugarch)
+resid=regLR.arma01$residuals
+ts.plot(resid)
+pacf(resid^2)
+
+#Kiểm định
+ArchTest(resid, lags = 2, demean = FALSE)	
+# Ước lượng mô hình
+arch2<-garch(resid,order = c(0,2))
+summary(arch2)
+
+# Dự báo volatility cho 10 ngày tiếp từ mô hình ARIMA(0,0,1)
+model=ugarchspec(variance.model = list(model = "sGARCH",garchOrder = c(2,0)),mean.model = list(armaOrder = c(0,1),include.mean=FALSE))
+fit1=ugarchfit(spec = model,data=log_return)
+volf10=ugarchforecast(fit1,n.head=10)
+volf10
+
+```
+
+#II. SỐ LIỆU THEO QUÝ - Chuỗi doanh thu PVG
+##1. Nhập dữ liệu
+```{r}
+doanhthu <- read.csv("E:/Time Series/BTL/TTH/Doanh thu.csv")
+save(doanhthu,file="revenuePVG.rda")
+View(doanhthu)
+attach(doanhthu)
+dt <- ts(Doanh_thu, start=c(2010,1), frequency = 4)
+plot(dt,type='l',lwd=2)
+
+```
+##2. Tạo biến xu thế, mùa vụ
+```{r}
+time<-seq_along(dt)
+summary(time)
+s1 <- c(rep(c(1,0,0,0), 14))				
+s2 <- c(rep(c(0,1,0,0), 14))
+s3 <- c(rep(c(0,0,1,0), 14))
+s4 <- c(rep(c(0,0,0,1), 14))
+
+
+```
+##3. Các mô hình
+###MH1: linear-linear
+```{r}
+reg1 <- lm(dt~time) 
+summary(reg1)
+
+rmse(dt,fitted(reg1))
+mape(dt,fitted(reg1))
+
+dt1<-ts(fitted(reg1), start=c(2010,1), frequency = 4)
+plot(dt)
+lines(dt1,col="blue")
+```
+###MH2: linear-log
+```{r}
+reg2 <- lm(dt~log(time))
+summary(reg2)
+
+rmse(dt,fitted(reg2))
+mape(dt,fitted(reg2))
+
+dt2<-ts(fitted(reg2), start=c(2010,1), frequency = 4)
+plot(dt)
+lines(dt2,col="blue")
+```
+###MH3: log-linear
+```{r}
+reg3 <- lm(log(dt)~time)			
+summary(reg3)
+
+rmse(dt,exp(fitted(reg3)))
+mape(dt,exp(fitted(reg3)))
+
+dt3<-ts(exp(fitted(reg3)), start=c(2010,1), frequency = 4)
+plot(dt)
+lines(dt3,col="blue")
+```
+###MH4: log-log
+```{r}
+reg4 <- lm(log(dt)~log(time))
+summary(reg4)
+
+rmse(dt,exp(fitted(reg4)))
+mape(dt,exp(fitted(reg4)))
+
+dt4<-ts(exp(fitted(reg4)), start=c(2010,1), frequency = 4)
+plot(dt)
+lines(dt4,col="blue")
+```
+###MH5: Hồi quy với biến giả mùa vụ
+```{r}
+reg5 <- lm(dt ~ s2+s3+s4)
+summary(reg5)
+
+rmse(dt,fitted(reg5))
+mape(dt,fitted(reg5))
+
+dt5<-ts(fitted(reg5), start=c(2010,1), frequency = 4)
+plot(dt)
+lines(dt5,col="blue")
+
+
+
+```
+###MH6: Xu thế thời gian tuyến tính + mùa vụ, dạng cộng
+```{r}
+reg6 <-lm(dt~time+s2+s3+s4)
+summary(reg6)
+
+rmse(dt,fitted(reg6))
+mape(dt,fitted(reg6))
+
+dt6<-ts(fitted(reg6), start=c(2010,1), frequency = 4)
+plot(dt)
+lines(dt6,col="blue")
+```
+###MH7: Xu thế thời gian tuyến tính + mùa vụ, dạng nhân
+```{r}
+reg7 <-lm(dt~time + time*s2 + time*s3+ time*s4)
+summary(reg7)
+
+rmse(dt,fitted(reg7))
+mape(dt,fitted(reg7))
+
+dt7<-ts(fitted(reg7), start=c(2010,1), frequency = 4)
+plot(dt)
+lines(dt7,col="blue")
+```
+###MH8: Xu thế thời gian không tuyến tính, mùa vụ dạng cộng
+```{r}
+reg8 <- lm(log(dt)~time + s2 + s3 + s4)
+summary(reg8)
+
+rmse(dt,exp(fitted(reg8)))
+mape(dt,exp(fitted(reg8)))
+
+dt8<-ts(exp(fitted(reg8)), start=c(2010,1), frequency = 4)
+plot(dt,lwd=2)+title("Xu thế thời gian không tuyến tính, mùa vụ dạng cộng")
+lines(dt8,col="red",lwd=2)
+```
+###MH9: Xu thế thời gian không tuyến tính, mùa vụ dạng nhân
+```{r}
+reg9 <- lm(log(dt)~time + time*s2 + time*s3 + time*s4)
+summary(reg9)
+
+rmse(dt,exp(fitted(reg9)))
+mape(dt,exp(fitted(reg9)))
+
+dt9<-ts(exp(fitted(reg9)), start=c(2010,1), frequency = 4)
+plot(dt,lwd=2)+title(" Xu thế thời gian không tuyến tính, mùa vụ dạng nhân")
+lines(dt9,col="red",lwd=2)
+```
+###MH10: Holt winter dạng cộng
+```{r}
+hw.dt.a <- HoltWinters(dt, seasonal = "a")
+hw.dt.a
+
+rmse(dt,fitted(hw.dt.a))
+mape(dt,fitted(hw.dt.a))
+
+plot(dt)
+lines(fitted(hw.dt.a)[,1],col = "blue")
+
+f1 <- forecast(hw.dt.a, n.ahead=4)
+f1
+```
+###MH11: Holt winter dạng nhân
+```{r}
+hw.dt.m <- HoltWinters(dt, seasonal = "m")
+hw.dt.m
+
+rmse(dt,fitted(hw.dt.m))
+mape(dt,fitted(hw.dt.m))
+
+plot(dt)
+lines(fitted(hw.dt.m)[,1],col = "blue")
+
+f2 <- forecast(hw.dt.m, n.ahead=4)
+f2
+```
+

@@ -1,0 +1,369 @@
+---
+title: "DieuLinh_G8_BTCN"
+output: html_document
+date: "2024-04-09"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(zoo)
+library(sandwich)
+library(survival)
+library(car)
+library(carData)
+library(AER)
+library(stargazer)
+library(ggplot2)
+library(caret)
+library(caTools)
+library(readxl)
+library(Metrics)
+library(TTR)
+library(htmltools)
+library(tsutils)
+library(urca)
+library(readxl)
+library(lmtest)
+library(forecast) #for Arima 
+library(FinTS)
+```
+```{r}
+#I. Dự báo cho năm 2024 với số liệu quý 
+
+dataPVCNetRevenue <- read_excel("E:/Time Series/BTL/DL/dataPVCNetRevenue.xlsx")
+save(dataPVCNetRevenue,file = "revenuePVC.rda")
+View(dataPVCNetRevenue)
+attach(dataPVCNetRevenue)
+```
+```{r}
+#1. Tạo biến xu thế
+ts(dataPVCNetRevenue$net_revenue, start = c(2008,1), end = c(2023,4), frequency = 4) 
+netR <- ts(dataPVCNetRevenue$net_revenue, start = c(2008,1), end = c(2023,4), frequency = 4)
+netR
+plot.ts(netR)
+
+time <- seq_along(netR) 
+summary(time)
+```
+```{r}
+#Mô hình 1: linear-linear
+plot(time,netR)
+abline(lm(netR~time))
+reg1 <- lm(netR~time) 
+summary(reg1)
+
+netRf1 <- ts(fitted(reg1),start = c(2008,1), frequency = 4) 
+plot.ts(netR) 
+lines(netRf1, col = "red")
+rmse(netR[1:64],fitted(reg1)[1:64])
+mape(netR[1:64],fitted(reg1)[1:64])
+```
+```{r}
+#Mô hình 2: linear-log
+reg2 <- lm(netR~log(time)) 
+summary(reg2)
+netRf2 <- ts(fitted(reg2),start = c(2008,1), frequency = 4)
+plot.ts(netR) 
+lines(netRf2, col = "green")
+rmse(netR[1:64],fitted(reg2)[1:64])
+mape(netR[1:64],fitted(reg2)[1:64])
+```
+```{r}
+#Mô hình 3: log-linear
+reg3 <- lm(log(netR)~time) 
+summary(reg3)
+netRf3 <- ts(fitted(reg3),start = c(2008,1), frequency = 4)
+plot.ts(netR) 
+lines(netRf3, col = "blue")
+rmse(netR,exp(fitted(reg3)))
+mape(netR,exp(fitted(lm(reg3))))
+```
+```{r}
+#Mô hình 4: log-log
+reg4 <- lm(log(netR)~log(time)) 
+summary(reg4)
+netRf4 <- ts(fitted(reg4),start = c(2008,1), frequency = 4)
+plot.ts(netR) 
+lines(netRf4, col = "grey")
+rmse(netR,exp(fitted(reg4)))
+mape(netR,exp(fitted(reg4)))
+```
+```{r}
+#Tạo biến giả
+s1 <- c(rep(c(1,0,0,0), 16)) 
+s2 <- c(rep(c(0,1,0,0), 16)) 
+s3 <- c(rep(c(0,0,1,0), 16)) 
+s4 <- c(rep(c(0,0,0,1), 16))
+seas <- seasdummy(64,4)
+```
+
+```{r}
+#Mô hình 5: Hồi quy với biến mùa vụ
+reg5 <- lm(netR ~ s2+s3+s4)
+summary(reg5)
+rmse(netR[1:64],fitted(reg5)[1:64])
+mape(netR[1:64],fitted(reg5)[1:64])
+netRf5 <- ts(fitted(reg5),start = c(2008,1), frequency = 4)
+plot.ts(netR) 
+lines(netRf5, col = "red")
+```
+```{r}
+#Mô hình 6: Xu thế tuyến tính thời gian + mùa vụ (dạng cộng)
+reg6 <-lm(netR ~ time + s2+s3+s4) 
+summary(lm(netR ~ time + s2+s3+s4))
+rmse(netR[1:64],fitted(reg6)[1:64])
+mape(netR[1:64],fitted(reg6)[1:64])
+netRf6 <- ts(fitted(reg6),start = c(2008,1), frequency = 4)
+plot.ts(netR) 
+lines(netRf6, col = "blue")
+```
+```{r}
+#Mô hình 7: Xu thế tuyến tính thời gian + mùa vụ (dạng nhân)
+reg7 <-lm(netR ~ time + time*s2 + time*s3+ time*s4)
+summary(reg7)
+rmse(netR[1:64],fitted(reg7)[1:64])
+mape(netR[1:64],fitted(reg7)[1:64])
+netRf7 <- ts(fitted(reg7),start = c(2008,1), frequency = 4)
+plot.ts(netR) 
+lines(netRf7, col = "green")
+```
+```{r}
+#Mô hình 8: Xu thế không tuyến tính thời gian + mùa vụ (dạng cộng)
+reg8 <-(lm(log(netR)~time + s2 + s3 + s4))
+summary(reg8)
+rmse(netR,exp(fitted(reg8)))
+mape(netR,exp(fitted(reg8)))
+netRf8 <- ts(fitted(reg8),start = c(2008,1), frequency = 4)
+plot.ts(netR) 
+lines(netRf8, col = "grey")
+```
+```{r}
+#Mô hình 9: Xu thế không tuyến tính thời gian + mùa vụ (dạng nhân)
+reg9<- lm(log(netR)~time + time*s2 + time*s3 + time*s4)
+summary(reg9)
+rmse(netR,exp(fitted(reg9)))
+mape(netR,exp(fitted(reg9)))
+netRf9 <- ts(fitted(reg9),start = c(2008,1), frequency = 4)
+plot.ts(netR) 
+lines(netRf9, col = "red")
+
+```
+```{r}
+#Mô hình 10: Holt - Winter có mùa vụ dạng cộng
+dtt <-netR[1:64]
+dtt <-ts(dtt,start=c(2006,1),frequency = 4)
+hw.dtt.a <- HoltWinters(dtt, seasonal = "a")
+hw.dtt.a
+plot.ts(dtt)
+lines(fitted(hw.dtt.a)[,1], col = "blue")
+rmse(netR[1:64],fitted(hw.dtt.a)[1:64])
+mape(netR[1:64],fitted(hw.dtt.a)[1:64])
+mape(netR[61:64],fitted(hw.dtt.a)[61:64])
+```
+```{r}
+#Mô hình 11: Holt winter có mùa vụ dạng nhân
+hw.dtt.m <- HoltWinters(dtt, seasonal = "m") 
+hw.dtt.m
+plot.ts(dtt)
+lines(fitted(hw.dtt.m)[,1], col = "green")
+rmse(netR[1:64],fitted(hw.dtt.m)[1:64])
+mape(netR[1:64],fitted(hw.dtt.m)[1:64])
+mape(netR[61:64],fitted(hw.dtt.m)[61:64])
+```
+```{r}
+#II. Dự báo chuỗi giá cổ phiếu 2024 
+dataPVCprice <- read_excel("E:/Time Series/BTL/DL/dataPVCprice.xlsx")
+save(dataPVCprice,file = "stockPVC.rda")
+View(dataPVCprice) 
+attach(dataPVCprice)
+
+#Chuỗi giá cổ phiếu
+ts(dataPVCprice$Price, start = c(1,1), frequency = 1)
+Price <- ts(Price, start = c(1,1), frequency = 1)
+Price
+
+#Chuỗi log - return 
+LR<-diff(log(Price[1:498]))*100
+LR
+```
+```{r}
+#Thống kê mô tả
+summary(Price)
+summary(LR)
+```
+```{r}
+#Kiểm định tính phân phối chuẩn 
+jarque.bera.test(Price)
+jarque.bera.test(LR)
+```
+```{r}
+#Trực quan hoá chuỗi giá PVC
+plot.ts(Price)
+#Trực quan hoá chuỗi sai phân của PVC
+plot.ts(diff(Price))
+#Trực quan hoá chuỗi log - return của PVC
+plot.ts(LR)
+```
+```{r}
+#Kiểm định Dickey-Fuller
+#Kiểm định tính dừng cho chuỗi giá
+#1.1 Có hệ số chặn và xu thế
+summary(ur.df(Price,type = "trend",lag = 0))
+#1.2 Có hệ số chặn
+summary(ur.df(Price,type = "drift",lag = 0))
+```
+```{r}
+#Kiểm định tính dừng cho chuỗi sai phân
+#2.1 Có hệ số chặn và xu thế
+summary(ur.df(diff(Price),type = "trend",lag = 0))
+#2.2 Có hệ số chặn
+summary(ur.df(diff(Price),type = "drift",lag = 0))
+#2.3 Không có hệ số chặn 
+summary(ur.df(diff(Price),type = "none",lag = 0))
+```
+```{r}
+#Kiểm định tính dừng cho chuỗi log - return 
+#3.1 CÓ hệ số chặn và xu thế
+summary(ur.df(LR,type="trend",lag=0))
+#3.2 Có hệ số chặn
+summary(ur.df(LR,type="drift",lag=0))
+#3.3 Không có hệ số chặn
+summary(ur.df(LR,type="none",lag=0))
+```
+```{r}
+#Kiểm dịnh ACF, PACF cho chuỗi log - return 
+
+acf(LR)
+pacf(LR)
+```
+```{r}
+#Ước lượng 
+
+reg.lr.101<-arima(LR, order=c(1,0,1))
+summary(reg.lr.101)
+
+reg.lr.102<-arima(LR, order=c(1,0,2))
+summary(reg.lr.102) 
+
+reg.lr.105<-arima(LR, order=c(1,0,5))
+summary(reg.lr.105) 
+
+reg.lr.501<-arima(LR, order=c(5,0,1))
+summary(reg.lr.501) 
+
+reg.lr.502<-arima(LR, order=c(5,0,2))
+summary(reg.lr.502) 
+
+reg.lr.505<-arima(LR, order=c(5,0,5))
+summary(reg.lr.505) 
+```
+```{r}
+#Kiểm định tính dừng qua nghiệm nghịch đảo và tính nhiễu trắng 
+
+autoplot(reg.lr.101)
+autoplot(reg.lr.102)
+
+checkresiduals(reg.lr.101)
+checkresiduals(reg.lr.102)
+
+```
+```{r}
+#chuỗi log-return trong 2024 thực tế
+logR<-diff(log(dataPVCprice$Price[498:508]))*100
+logR
+```
+
+```{r}
+#Dự báo log-return 10 ngày tiếp theo trong 2024
+#Mô hình arima(1,0,1)
+lrf.101<-forecast(reg.lr.101)
+lrf.101$mean
+rmse(logR,lrf.101$mean)
+
+#Mô hình arima(1,0,2)
+lrf.102<-forecast(reg.lr.102)
+lrf.102$mean
+rmse(logR,lrf.102$mean)
+```
+```{r}
+#Suy ra giá cổ phiếu dự báo dựa trên kết quả dự báo log - return 
+#Mô hình arima(1,0,1)
+a<-exp(lrf.101$mean)
+
+n1<-Price[498]*a[1]
+n2<-a[2]*n1
+n3<-a[3]*n2
+n4<-a[4]*n3
+n5<-a[5]*n4
+n6<-a[6]*n5
+n7<-a[7]*n6
+n8<-a[8]*n7
+n9<-a[9]*n8
+n10<-a[10]*n9
+pricePVCf<-cbind(n1,n2,n3,n4,n5,n6,n7,n8,n9,n10)
+pricePVCf
+
+mape(dataPVCprice$Price[499:508],pricePVCf)
+```
+```{r}
+#Suy ra giá cổ phiếu dự báo dựa trên kết quả dự báo log - return 
+lrf.102<-forecast(reg.lr.102)
+lrf.102$mean
+b<-exp(lrf.102$mean)
+
+n1<-Price[498]*b[1]
+n2<-b[2]*n1
+n3<-b[3]*n2
+n4<-b[4]*n3
+n5<-b[5]*n4
+n6<-b[6]*n5
+n7<-b[7]*n6
+n8<-b[8]*n7
+n9<-b[9]*n8
+n10<-b[10]*n9
+pricePVCf<-cbind(n1,n2,n3,n4,n5,n6,n7,n8,n9,n10)
+pricePVCf
+
+mape(dataPVCprice$Price[499:508],pricePVCf)
+```
+```{r}
+#III. ARCH/GARCH 
+#Xem bậc tự hồi quy 
+resid<-reg.lr.102$residuals
+ts.plot(resid^2)
+pacf(resid^2)
+
+```
+```{r}
+library(dynlm)
+summary(dynlm(resid^2 ~ L(resid)))	
+```
+
+```{r}
+#Kiểm định
+ArchTest(resid,lags = 1,demean = FALSE)
+```
+
+```{r}
+# Ước lượng mô hình
+arch1<-garch(resid,order = c(0,1))
+summary(arch1)
+```
+
+```{r}
+#Dự báo volatility
+library(rugarch)
+garchSpec <- ugarchspec(
+           variance.model=list(model="sGARCH",
+                               garchOrder=c(1,0)),
+           mean.model=list(armaOrder=c(1,2)), 
+           distribution.model="std")
+garchFit <- ugarchfit(spec=garchSpec, data=LR)
+garchFit
+vol10<-ugarchforecast(garchFit,n.ahead=10)
+vol10
+```
+

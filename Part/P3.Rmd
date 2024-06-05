@@ -1,0 +1,15 @@
+---
+title: "P3_Kiểm định tính dừng"
+author: "tntrg_03"
+date: "2024-02-29"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#6.2.Kiểm định nghiệm đơn vị
+$d(Y_t)=\delta Y_{t-1}+v_t $:Không có hệ số chặn
+$d(Y_t)=\mu + \delta Y{t-1}+v_t$:Có hệ số chặn
+$d(Y_t)=\mu +\delta Y_{t-1}+\beta t+v_t$:Có xu thế

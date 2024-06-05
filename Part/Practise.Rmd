@@ -1,0 +1,160 @@
+---
+title: "Practise"
+author: "tntrg_03"
+date: "2024-03-14"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(foreign)
+library(car)
+library(lmtest)
+library(zoo)
+library(sandwich)
+library(survival)
+library(AER)
+library(stargazer)
+library(ggplot2)
+library(caret)
+library(caTools)
+library(readxl)
+library(Metrics)
+library(TTR)
+library(htmltools)
+library(tsutils)
+library(urca)
+library(forecast)
+library(readxl)
+
+GDPgr <- read_excel("E:/Time Series/Data/Data/GDPgrowth_G7.xls")
+attach(GDPgr)
+```
+# I.GDP_g7
+
+## 1.Trung bình của usa, var(jpy), cov(usa,jpy), cor
+
+```{r}
+mean(usa)
+var(jpn)
+cov(usa,jpn)
+cor(usa,jpn)
+```
+
+## 2.Kiểm định tương quan giữa usa,jpn
+
+```{r}
+cor.test(usa,jpn)
+```
+
+Với mức ý nghĩa 5%, bác bỏ H0, có tương quan
+
+## 3.Hồi quy usa theo xu thế, có hệ số chặn
+
+$usa_t=\beta_0+\beta_2*t+u_t$
+
+```{r}
+usa<-ts(usa,start=c(1961),frequency = 1)
+time<-seq_along(usa)
+lm1=lm(usa~time)
+summary(lm1)
+e1961=usa[1]-lm1$fitted.values[1]
+e1961
+usa2021=lm1$coefficients[1]+61*lm1$coefficients[2]
+usa2021
+```
+
+-   Hệ số góc = $\beta_0=4.39479$ có ý nghĩa thống kê ở mức ý nghĩa 5%
+-   Phần dư ứng với năm 1961 $e_1961=-2.046775$
+-   Dự báo năm 2021 $usa_{2021}=4.39479-0.04802*61=1.465754$
+
+## 4. Kiểm định ADF cho chuỗi usa, có xu thế, lag=4
+
+$\triangle usa_t= \beta_0+\beta_1*t+\delta*usa_{t-1}+\gamma_1*\triangle usa_{t-1,2,3,4}$
+
+```{r}
+summary(ur.df(usa,type = "trend", lag = 4))
+```
+
+-   Biến xu thế có ý nghĩa thống kê ở mức 5%, do đó chuỗi usa có xu thế và không dừng
+
+-   Hệ số biến xu thế -0.04893
+
+-   Với mức ý nghĩa 5%, không có nghiệm đơn vị, usa dừng xu thế
+
+## 5. Kiểm định ADF cho chuỗi usa, chỉ có hệ số chặn
+
+```{r}
+summary(ur.df(usa,type = "drift", lag = 0))
+```
+
+-   Hệ số chặn có ý nghĩa thống kê, không có nghiệm đơn vị ở mức ý nghĩa 5%
+## 6. Kiểm định ADF cho chuỗi sai phân, lag = 3, có hệ số chặn
+```{r}
+summary(ur.df(diff(usa),type = "drift",lags = 3))
+```
+- Do đó usa là I(1)
+
+## 7. Ước lượng mô hình ARIMA(1,1,1) cho chuỗi usa, có hệ số chặn
+```{r}
+usa_arima=Arima(usa,order = c(1,1,1),include.constant = TRUE)
+summary(usa_arima)
+usa_arima$coef[3]*(1-usa_arima$coef[1])
+t=(usa_arima$coef[1]-0)/sqrt(usa_arima$var.coef[1,1])
+t
+```
+
+- Trung bình dài hạn $\mu^*=-0.0496$
+- Hệ số chặn của mô hình $\mu=-0.0373$
+- Kiểm định hệ số ar1 có ý nghĩa thống kê? *CÓ*
+```{r}
+forecast(usa_arima)
+```
+
+# II. data VN_CPI_IMF
+```{r}
+VN_CPI <- read_excel("E:/Time Series/Data/Data/VN_CPI_IMF.xlsx")
+attach(VN_CPI)
+cpi <-ts(cpi, start = c(2017,1),frequency = 12)
+mean(cpi)
+```
+```{r}
+time<-seq_along(cpi)
+lm_cpi<-lm(cpi~time)
+summary(lm_cpi)
+```
+## 1.Holt-winter dạng cộng
+```{r}
+hw.cpi.a <- HoltWinters(cpi, seasonal = "a")
+hw.cpi.a
+```
+- Hệ số tháng 1 = 0.237
+- Hệ số xu thế = 0.479
+
+## 2.Dự báo tháng 1 năm 2022
+```{r}
+cpi_t1.2022=172.18496657+0.47911605*1+0.23734460
+cpi_t1.2022
+```
+## 3.Dùng decomposition dạng cộng
+```{r}
+cpi <-ts(cpi, start = c(2017,1),frequency = 12)
+decom_cpi_a=decompose(cpi, type = "additive")
+plot(decom_cpi_a)
+# Lưu các thành phần xu thế,mùa vụ,ngẫu nhiên
+cpi.trend.a<-decom_cpi_a$trend
+cpi.seas.a<-decom_cpi_a$seasonal
+cpi.rand.a<-decom_cpi_a$random
+cpi.trendseas.a<-cpi-cpi.rand.a
+cpi.seas.a
+cpi.trend.a
+```
+- Giá trị mùa vụ vào tháng 1/2018 là:*0.559460982*
+- Giá trị xu thế vào tháng 1/2018 là:*156.4256*
+
+
+
+

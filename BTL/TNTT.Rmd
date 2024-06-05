@@ -1,0 +1,640 @@
+---
+title: "BTL"
+author: "huhu"
+date: "2023-12-31"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+#I.SỐ LIỆU THEO NGÀY (DAILY DATA)
+##1.Nhập dữ liệu
+```{r}
+library(readr)
+library(zoo)
+library(lmtest)
+library(car)
+library(carData)
+library(moments)
+library(ggplot2)
+library(forecast)
+library(tseries)
+library(FinTS)
+stockPVS <-read.csv("E:/Time Series/BTL/stockPVS.csv")
+save(stockPVS,file = "stockPVS.rda")
+#stockPVS
+attach(stockPVS)
+```
+##2.Tính chuỗi log_return của mã PVS
+
+```{r}
+close_PVS<-stockPVS$close[1:498]
+log_return<-diff(log(close[1:498]))*100
+head(log_return)
+```
+##3.Thống kê mô tả
+```{r}
+summary(close)
+summary(log_return)
+```
+##4.Kiểm định phân phối Chuẩn và tính dừng
+```{r}
+
+plot(density(log_return,na.rm = FALSE))
+plot(density(close,na.rm = FALSE))
+
+jarque.test(log_return)
+shapiro.test(log_return)
+jarque.test(close)
+shapiro.test(close)
+
+```
+```{r}
+library(urca)
+plot.ts((close_PVS),type = "l")
+plot(diff(close_PVS),type="l")
+summary(ur.df(close_PVS,type = "trend",selectlags = "AIC"))
+summary(ur.df(diff(close_PVS),type = "drift"))
+plot((log_return),type = "l")
+summary(ur.df(log_return,type = "trend",selectlags = "AIC"))
+```
+# Có xu thế
+```{r}
+summary(ur.df(close_PVS,type = "trend",lag=0))
+summary(ur.df(diff(close_PVS),type = "trend",lag=0))
+summary(ur.df(log_return,type ="trend",lag=0))
+```
+# Có hệ số chặn
+```{r}
+summary(ur.df(close_PVS,type = "drift",lag=0))
+summary(ur.df(log_return,type ="drift",lag=0))
+```
+Do đó :-chuỗi giá đóng cửa mã PVS không dừng, sai phân bậc 1 của nó thì dừng
+- chuỗi log_return là chuỗi dừng
+
+##5.Xác định bậc ARIMA của chuỗi sai phân bậc 1 và bậc ARMA của chuỗi log_return
+```{r}
+acf(diff(close_PVS),plot = TRUE)
+acf(diff(close_PVS),plot = FALSE)
+pacf(diff(close_PVS),plot=TRUE)
+pacf(diff(close_PVS),plot = FALSE)
+```
+```{r}
+acf(log_return,plot = TRUE)
+acf(log_return,plot = FALSE)
+pacf(log_return,plot=TRUE)
+pacf(log_return,plot = FALSE)
+forecast:::auto.arima(log_return,ic = "aic")
+```
+
+
+
+##6.Sử dụng các kĩ thuật và mô hình ARIMA
+###6.1. ARMA cho chuỗi sai phân bậc 1 của giá đóng cửa mã PVS
+```{r}
+library(tseries)
+library(forecast)
+paste("Chuỗi giá đóng cửa")
+regPVS.arma10<-arima(close_PVS,order = c(1,1,0),include.mean = TRUE)
+summary(regPVS.arma10)
+
+regPVS.arma11<-arima(close_PVS,order = c(1,1,1),include.mean = TRUE)
+summary(regPVS.arma11)
+
+regPVS.arma12<-arima(close_PVS,order = c(1,1,2),include.mean = TRUE)
+summary(regPVS.arma12)#
+
+regPVS.arma20<-arima(close_PVS,order = c(2,1,0),include.mean = TRUE)
+summary(regPVS.arma20)
+
+regPVS.arma21<-arima(close_PVS,order = c(2,1,1),include.mean = TRUE)
+summary(regPVS.arma21)
+
+regPVS.arma22<-Arima(close_PVS,order = c(2,1,2),include.constant  = TRUE)
+summary(regPVS.arma22)#
+```
+####a.Kiểm định mô hình
+```{r}
+#Xem tính dừng qua nghiệm đơn vị
+autoplot(regPVS.arma22)
+#Kiểm định tính nhiễu trắng của phần dư
+checkresiduals(regPVS.arma22)
+```
+
+### 6.2.Chuỗi log_return
+
+```{r}
+paste("Chuỗi log_return")
+regLR.arma22<-Arima(log_return,order = c(2,0,2),include.constant = TRUE)
+summary(regLR.arma22)#
+
+regLR.arma27<-Arima(log_return,order = c(2,0,7),include.constant = TRUE)
+summary(regLR.arma27)
+
+regLR.arma72<-Arima(log_return,order = c(7,0,2),include.constant = TRUE)
+summary(regLR.arma72)
+
+regLR.arma77<-Arima(log_return,order = c(7,0,7),include.constant = TRUE)
+summary(regLR.arma77)
+```
+####a.Kiểm định mô hình regLR.arma22
+```{r}
+#Xem tính dừng qua nghiệm đơn vị
+autoplot(regLR.arma22)
+#Kiểm định tính nhiễu trắng của phần dư
+checkresiduals(regLR.arma22)
+```
+
+
+##7.Dự báo và tính sai số dự báo
+```{r}
+library(Metrics)
+ pvs2024<- stockPVS$close[499:508]
+
+```
+
+
+```{r}
+close_PVSf<-forecast(regPVS.arma22,h=10)
+autoplot(close_PVSf)
+close_PVSf
+paste("Sai số dự báo cho giá cổ phiếu PVS 10 ngày đầu của 2024")
+mape(pvs2024,close_PVSf$mean)
+```
+
+
+##8.Dự báo log_return suy ra dự báo giá cổ phiếu
+```{r}
+LRf<-forecast(regLR.arma22,h=10)
+ln<-LRf$mean
+TL<-exp(ln)
+
+n1<-TL[1]*close_PVS[498]
+n2<-TL[2]*pvs2024[2]
+n3<-TL[3]*pvs2024[3]
+n4<-TL[4]*pvs2024[4]
+n5<-TL[5]*pvs2024[5]
+n6<-TL[6]*pvs2024[6]
+n7<-TL[7]*pvs2024[7]
+n8<-TL[8]*pvs2024[8]
+n9<-TL[9]*pvs2024[9]
+n10<-TL[10]*pvs2024[10]
+pricePVSf<-cbind(n1,n2,n3,n4,n5,n6,n7,n8,n9,n10)
+paste("Giá trị dự báo giá cổ phiếu 10 ngày đầu năm 2024 ")
+pricePVSf
+paste("Sai số dự báo")
+mape(pricePVSf,pvs2024)
+```
+
+```{r}
+LRf<-forecast(regLR.arma27,h=10)
+ln<-LRf$mean
+TL<-exp(ln)
+
+n1<-TL[1]*close_PVS[498]
+n2<-TL[2]*pvs2024[2]
+n3<-TL[3]*pvs2024[3]
+n4<-TL[4]*pvs2024[4]
+n5<-TL[5]*pvs2024[5]
+n6<-TL[6]*pvs2024[6]
+n7<-TL[7]*pvs2024[7]
+n8<-TL[8]*pvs2024[8]
+n9<-TL[9]*pvs2024[9]
+n10<-TL[10]*pvs2024[10]
+pricePVSf1<-cbind(n1,n2,n3,n4,n5,n6,n7,n8,n9,n10)
+paste("Giá trị dự báo giá cổ phiếu 10 ngày đầu năm 2024 ")
+pricePVSf1
+paste("Sai số dự báo")
+mape(pricePVSf1,pvs2024)
+```
+```{r}
+LRf<-forecast(regLR.arma72,h=10)
+ln<-LRf$mean
+TL<-exp(ln)
+
+n1<-TL[1]*close_PVS[498]
+n2<-TL[2]*pvs2024[2]
+n3<-TL[3]*pvs2024[3]
+n4<-TL[4]*pvs2024[4]
+n5<-TL[5]*pvs2024[5]
+n6<-TL[6]*pvs2024[6]
+n7<-TL[7]*pvs2024[7]
+n8<-TL[8]*pvs2024[8]
+n9<-TL[9]*pvs2024[9]
+n10<-TL[10]*pvs2024[10]
+pricePVSf2<-cbind(n1,n2,n3,n4,n5,n6,n7,n8,n9,n10)
+paste("Giá trị dự báo giá cổ phiếu 10 ngày đầu năm 2024 ")
+pricePVSf2
+paste("Sai số dự báo")
+mape(pricePVSf2,pvs2024)
+```
+
+```{r}
+LRf<-forecast(regLR.arma77,h=10)
+ln<-LRf$mean
+TL<-exp(ln)
+
+n1<-TL[1]*close_PVS[498]
+n2<-TL[2]*pvs2024[2]
+n3<-TL[3]*pvs2024[3]
+n4<-TL[4]*pvs2024[4]
+n5<-TL[5]*pvs2024[5]
+n6<-TL[6]*pvs2024[6]
+n7<-TL[7]*pvs2024[7]
+n8<-TL[8]*pvs2024[8]
+n9<-TL[9]*pvs2024[9]
+n10<-TL[10]*pvs2024[10]
+pricePVSf3<-cbind(n1,n2,n3,n4,n5,n6,n7,n8,n9,n10)
+paste("Giá trị dự báo giá cổ phiếu 10 ngày đầu năm 2024 ")
+pricePVSf3
+paste("Sai số dự báo")
+mape(pricePVSf3,pvs2024)
+```
+##9.ARCH-GARCH cho regLR.arma72
+```{r}
+resid=regLR.arma72$residuals
+ts.plot(resid)
+pacf(resid^2)
+
+```
+```{r}
+#Kiểm định
+ArchTest(resid,lags = 1,demean = FALSE)
+# Ước lượng mô hình
+arch1<-garch(resid,order = c(0,1))
+summary(arch1)
+```
+
+
+```{r}
+library(rugarch)
+
+# Dự báo volatility cho 10 ngày tiếp từ mô hình ARIMA(7,0,2)
+model=ugarchspec(variance.model = list(model = "sGARCH",garchOrder = c(1,0)),mean.model = list(armaOrder = c(7,2),include.mean=FALSE))
+fit1=ugarchfit(spec = model,data=log_return)
+volf10=ugarchforecast(fit1,n.head=10)
+volf10
+
+```
+
+#II. DOANH THU THEO QUÝ MÃ PVS (QUARTERLY DATA)
+```{r}
+library(zoo)
+library(car)
+library(carData)
+library(lmtest)
+library(tseries)
+library(urca)
+library(ggplot2)
+library(forecast)
+library(TTR)
+library(Metrics)# tính RMSE,MAPE
+library(tsutils)# tạo biến giả mùa vụ (phải cài thêm package 'greybox')
+library(Hmisc)
+library(readxl)
+revenue <- read_excel("E:/Time Series/BTL/revenue.xlsx")
+save(revenue,file = "revenuePVS.rda")
+dt<-ts(revenue$`Doanh thu`,start = c(2006,3),frequency = 4)
+plot(dt)
+```
+```{r}
+time<-seq_along(dt)
+ggplot( ,aes(time,dt, group=1)) +
+  geom_line(color = "#157DEC")+
+  geom_point(color = "blue", alpha = 0.5)+
+  labs(title = "PVS Net Revenue")+
+  xlab("Time")+
+  ylab("Net Revenue(PVS)")
+```
+
+```{r}
+dtma4<-ma(dt,order = 4,centre = FALSE)
+dtma4<-ts(dtma4,start = c(2006,4),frequency = 4)
+plot(dt)
+lines(dtma4,col="red")
+```
+##1. Tạo biến xu thế,mùa vụ
+```{r}
+time<-seq_along(dt)
+s1 <- c(0,0,rep(c(1,0,0,0), 16),1,0,0,0)
+s2 <- c(0,0,rep(c(0,1,0,0), 16),0,1,0,0)
+s3 <- c(1,0,rep(c(0,0,1,0), 16),0,0,1,0)
+s4 <- c(0,1,rep(c(0,0,0,1), 16),0,0,0,1)
+cbind(s1,s2,s3,s4)
+```
+
+##2. Hồi quy doanh thu theo xu thế,mùa vụ
+
+MH linear-linear:
+```{r}
+reg<-lm(dt~time)
+summary(reg)
+dtf1<-ts((fitted(reg)),start = c(2006,3),frequency = 4)
+plot(dt,lwd=2)
+lines(dtf1,col="red",lwd=2)
+rmse(dt,dtf1)
+mape(dt,dtf1)
+```
+```{r}
+#Dự báo 4 quý-2024
+dtf1=cbind()
+for(i in 71:74){
+  d=3557.28+23.04*i
+  dtf1=cbind(dtf1,d)
+}
+dtf1
+```
+MH linear-log
+```{r}
+reg<-lm(dt~log(time))
+summary(reg)
+dtf1<-ts((fitted(reg)),start = c(2006,3),frequency = 4)
+plot(dt,lwd=2)
+lines(dtf1,col="red",lwd=2)
+rmse(dt,dtf1)
+mape(dt,dtf1)
+```
+```{r}
+#Dự báo 4 quý-2024
+dtf1=cbind()
+for(i in 71:74){
+  d=1154.3+978.4*log(i)
+  dtf1=cbind(dtf1,d)
+}
+dtf1
+```
+MH log-linear:
+```{r}
+reg<-lm(log(dt)~(time))
+summary(reg)
+dtf1<-ts(exp((fitted(reg))),start = c(2006,3),frequency = 4)
+plot(dt,lwd=2)
+lines(dtf1,col="red",lwd=2)
+rmse(dt,dtf1)
+mape(dt,dtf1)
+```
+```{r}
+#Dự báo 4 quý-2024
+dtf1=cbind()
+for(i in 71:74){
+  d=exp(7.857+0.011*(i))
+  dtf1=cbind(dtf1,d)
+}
+dtf1
+```
+MH log-log:
+```{r}
+reg<-lm(log(dt)~log(time))
+summary(reg)
+dtf1<-ts(exp((fitted(reg))),start = c(2006,3),frequency = 4)
+plot(dt,lwd=2)
+lines(dtf1,col="red",lwd=2)
+rmse(dt,dtf1)
+mape(dt,dtf1)
+```
+```{r}
+#Dự báo 4 quý-2024
+dtf1=cbind()
+for(i in 71:74){
+  d=exp(7.037+0.37*log(i))
+  dtf1=cbind(dtf1,d)
+}
+dtf1
+```
+Hồi quy với biến giả mùa vụ
+```{r}
+reg1<-lm((dt)~s2+s3+s4)
+summary(reg1)
+dtf1<-ts((fitted(reg1)),start = c(2006,3),frequency = 4)
+plot(dt,lwd=2)
+lines(dtf1,col="red",lwd=2)
+rmse(dt,dtf1)
+mape(dt,dtf1)
+```
+```{r}
+#Dự báo 4 quý-2024
+reg1$coefficients[1]
+reg1$coefficients[1]+reg1$coefficients[2]
+reg1$coefficients[1]+reg1$coefficients[3]
+reg1$coefficients[1]+reg1$coefficients[4]  
+
+```
+Xu thế thời gian tuyến tính+mùa vụ dạng cộng
+```{r}
+reg1<-lm((dt)~time+s2+s3+s4)
+summary(reg1)
+dtf1<-ts((fitted(reg1)),start = c(2006,3),frequency = 4)
+plot(dt,lwd=2)
+lines(dtf1,col="red",lwd=2)
+rmse(dt,dtf1)
+mape(dt,dtf1)
+```
+```{r}
+#Dự báo 4 quý-2024
+reg1$coefficients[1]+reg1$coefficients[2]*71
+reg1$coefficients[1]+reg1$coefficients[2]*72+reg1$coefficients[3]
+reg1$coefficients[1]+reg1$coefficients[2]*73+reg1$coefficients[4]
+reg1$coefficients[1]+reg1$coefficients[2]*74+reg1$coefficients[5]  
+```
+ Dạng nhân
+```{r}
+reg2<-lm((dt)~time+I(time*s2)+I(time*s3)+I(time*s4))
+summary(reg2)
+dtf2<-ts((fitted(reg2)),start = c(2006,3),frequency = 4)
+plot(dt,lwd=2)
+lines(dtf2,col="red",lwd=2)
+rmse(dt,dtf2)
+mape(dt,dtf2)
+```
+```{r}
+#Dự báo 4 quý-2024
+reg2$coefficients[1]+reg2$coefficients[2]*71
+reg2$coefficients[1]+reg2$coefficients[2]*72+reg2$coefficients[3]*72
+reg2$coefficients[1]+reg2$coefficients[2]*73+reg2$coefficients[4]*73
+reg2$coefficients[1]+reg2$coefficients[2]*74+reg2$coefficients[5]*74  
+```
+Xu thế thời gian không tuyến tính và mùa vụ dạng cộng:
+```{r}
+reg2<-lm(log(dt)~time+s2+s3+s4)
+summary(reg2)
+dtf2<-ts(exp((fitted(reg2))),start = c(2006,3),frequency = 4)
+plot(dt,lwd=2)
+lines(dtf2,col="red",lwd=2)
+rmse(dt,dtf2)
+mape(dt,dtf2)
+```
+```{r}
+#Dự báo 4 quý-2024
+exp(reg2$coefficients[1]+reg2$coefficients[2]*71)
+exp(reg2$coefficients[1]+reg2$coefficients[2]*72+reg2$coefficients[3])
+exp(reg2$coefficients[1]+reg2$coefficients[2]*73+reg2$coefficients[4])
+exp(reg2$coefficients[1]+reg2$coefficients[2]*74+reg2$coefficients[5])  
+```
+Xu thế thời gian không tuyến tính và mùa vụ dạng nhân:
+```{r}
+reg2<-lm(log(dt)~time+I(time*s2)+I(time*s3)+I(time*s4))
+summary(reg2)
+dtf2<-ts(exp(fitted(reg2)),start = c(2006,3),frequency = 4)
+plot(dt,lwd=2)
+lines(dtf2,col="red",lwd=2)
+rmse(dt,dtf2)
+mape(dt,dtf2)
+```
+```{r}
+#Dự báo 4 quý-2024
+exp(reg2$coefficients[1]+reg2$coefficients[2]*71)
+exp(reg2$coefficients[1]+reg2$coefficients[2]*72+reg2$coefficients[3]*72)
+exp(reg2$coefficients[1]+reg2$coefficients[2]*73+reg2$coefficients[4]*73)
+exp(reg2$coefficients[1]+reg2$coefficients[2]*74+reg2$coefficients[5]*74)
+```
+
+###2.3 Holt-Winter
+####a.Dạng cộng
+```{r}
+reg3<-HoltWinters(dt,seasonal = "a")
+reg3
+dtf3<-ts(fitted(reg3)[,1],start = c(2007,3),frequency = 4)
+plot(dt,lwd=2,main="Holt-winter dạng cộng")
+lines(dtf3,col="red",lwd=2)
+print("RMSE")
+rmse(dt,dtf3)
+print("MAPE")
+mape(dt,dtf3)
+```
+```{r}
+forecast(reg3,h=4)
+```
+####b. Dạng nhân
+```{r}
+reg4<-HoltWinters(dt,seasonal = "m")
+reg4
+dtf4<-ts(fitted(reg4)[,1],start = c(2007,3),frequency = 4)
+plot(dt,lwd=2,main="Holt-winter dạng nhân")
+lines(dtf4,col="red",lwd=2)
+print("RMSE")
+rmse(dt,dtf4)
+print("MAPE")
+mape(dt,dtf4)
+```
+```{r}
+# Dự báo 4 quý năm 2024
+forecast(reg4,h=4)
+```
+##3. Tỷ lệ tăng trưởng doanh thu
+```{r}
+g.dt<-(-dt+lag(dt,1))*100/dt
+g.dt<-ts(g.dt,start = c(2006,4),frequency = 4)
+plot(g.dt,lwd=2)
+```
+###3.1. Tạo biến xu thế, mùa vụ cho g.dt
+```{r}
+time1<-seq_along(g.dt)
+s1 <- c(0,rep(c(1,0,0,0), 16),1,0,0)
+s2 <- c(0,rep(c(0,1,0,0), 16),0,1,0)
+s3 <- c(0,rep(c(0,0,1,0), 16),0,0,1)
+s4 <- c(1,rep(c(0,0,0,1), 16),0,0,0)
+cbind(s1,s2,s3,s4)
+```
+
+###3.2. Hồi quy theo xu thế,mùa vụ
+####a.Dạng cộng
+```{r}
+reg11<-lm((g.dt)~time1+s2+s3+s4)
+summary(reg11)
+plot(g.dt)
+g.dtf1<-(fitted(reg11))
+g.dtf1<-ts(g.dtf1,start = c(2006,4),frequency = 4)
+lines(g.dtf1,col="red")
+print("RMSE")
+rmse(g.dt,g.dtf1)
+print("MAPE")
+mape(g.dt,g.dtf1)
+```
+```{r}
+# Dự báo quý 4 năm 2023
+g.dtf1.q4.2023=30.5137-0.6168*69-9.6153
+print("Dự báo tỷ lệ tăng trưởng, doanh thu cho quý 4 năm 2023")
+g.dtf1.q4.2023/100
+(g.dtf1.q4.2023/100)*dt[69]+dt[69]
+```
+#### b.Dạng nhân
+```{r}
+reg12<-lm((g.dt)~time1+I(time1*s2)+I(time1*s3)+I(time1*s4))
+summary(reg12)
+plot(g.dt)
+g.dtf2<-(fitted(reg12))
+g.dtf2<-ts(g.dtf2,start = c(2007,3),frequency = 4)
+lines(g.dtf1,col="red")
+print("RMSE")
+rmse(g.dt,g.dtf2)
+print("MAPE")
+mape(g.dt,g.dtf2)
+```
+```{r}
+# Dự báo quý 4 năm 2023
+g.dtf2.q4.2023=35.7374-0.9525*69+0.2623*69
+print("Dự báo cho quý 4 năm 2023")
+g.dtf2.q4.2023
+(g.dtf2.q4.2023/100)*dt[69]+dt[69]
+```
+####c. Holt-Winter
+##### c.1. Dạng cộng
+```{r}
+reg13<-HoltWinters(g.dt,seasonal = "a")
+reg13
+g.dtf3<-ts(fitted(reg13)[,1],start = c(2007,4),frequency = 4)
+plot(g.dt,lwd=2)
+lines(g.dtf3,col="red",lwd=2)
+print("RMSE")
+rmse(g.dt,g.dtf3)
+print("MAPE")
+mape(g.dt,g.dtf3)
+```
+```{r}
+# Dự báo quý 4 năm 2023
+g.dtf3.q4.2023=19.6117034-0.2500846*1-16.0815062
+print("Dự báo cho quý 4 năm 2023")
+g.dtf3.q4.2023
+(g.dtf3.q4.2023/100)*dt[69]+dt[69]
+```
+##### c.2.Dạng nhân
+```{r}
+reg14<-HoltWinters(g.dt,seasonal = "m")
+reg14
+g.dtf4<-ts(fitted(reg14)[,1],start = c(2007,4),frequency = 4)
+plot(g.dt,lwd=2)
+lines(g.dtf4,col="red",lwd=2)
+print("RMSE")
+rmse(g.dt,g.dtf4)
+print("MAPE")
+mape(g.dt,g.dtf4)
+```
+```{r}
+# Dự báo quý 4 năm 2023
+g.dtf4.q4.2023=(7.169572+2.002267*1)*(-1.010907)
+print("Dự báo cho quý 4 năm 2023")
+g.dtf4.q4.2023
+(g.dtf4.q4.2023/100)*dt[69]+dt[69]
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

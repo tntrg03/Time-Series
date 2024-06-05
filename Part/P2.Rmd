@@ -1,0 +1,206 @@
+---
+title: 'Bai 5: Tính dừng và AR,MA'
+author: "tntrg_03"
+date: "2024-01-25"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = TRUE,
+	message = TRUE,
+	warning = TRUE
+)
+```
+
+#5.1. Nhiễu trắng
+##5.1.1. Tạo chuỗi nhiễu trắng
+```{r}
+#wn_t~N(0,1) dộc lập,300 quan sát
+# Nếu muốn mỗi lần chạy kqua đều giống nhau thì dùng set.seed()
+wn<-rnorm(300,0,1)
+ts(wn,start = 1,frequency = 1)
+plot.ts(wn)
+```
+##5.1.2. Hàm tự tương quan, tự tương quan riêng
+```{r}
+acf(wn)
+pacf(wn)
+```
+##5.1.3. Kiểm định tự tương quan, tự tương quan riêng
+```{r}
+Box.test(wn,lag = 10,type = "Box-Pierce")
+```
+=>p-value>0.05 chưa có cơ sở bác bỏ H0 ở mức ý nghĩa 5%
+
+#5.2. Chuỗi trung bình trượt MA
+##5.2.1. Tạo chuỗi MA(1) và xem ACF,PACF
+```{r}
+# Khởi tạo biến Y_t
+y<-rep(0,300)
+y<-ts(y,start = 1,frequency = 1)
+for(t in 2:300) {
+  y[t]=wn[t]+0.6*wn[t-1]
+}
+plot.ts(y)
+acf(y)
+pacf(y)
+```
+##5.2.2. Tạo chuỗi MA(2)
+```{r}
+for (t in 3:300) {
+  y[t]<-wn[t]+0.9*wn[t-1]+0.7*wn[t-2]
+}
+plot(y)
+acf(y)
+pacf(y)
+```
+#5.3. Chuỗi tự hồi quy AR
+##5.3.1. Tự hồi quy bậc 1 :AR(1)
+###a. Tạo bước ngẫu nhiên không hằng số
+$Y_t=\phi Y_{t-1}+u_t$ với $\phi=1$
+```{r}
+y<-rep(0,500)
+for(t in 2:500){
+  y[t]=y[t-1]+rnorm(500,0,1)[t]
+}
+plot(y)
+acf(y)
+pacf(y)
+```
+###b.Tạo bước ngẫu nhiên có hằng số
+$Y_t =\mu +\phi Y_t+u_t$
+```{r}
+# xu thế tăng :\mu>0
+for(t in 2:300){
+  y[t]=0.3+y[t-1]+rnorm(300,0,1)
+}
+plot.ts(y)
+acf(y)
+pacf(y)
+```
+```{r}
+#xu thế giảm :\mu<0
+for(t in 2:300){
+  y[t]=-0.3+y[t-1]+rnorm(300,0,1)
+}
+plot.ts(y)
+acf(y)
+pacf(y)
+```
+###c.AR(1) dừng 
+$Y_t=\phi Y_{t-1}+u_t$ với $-1<\phi<1$
+```{r}
+for (t in 2:300){y[t]<- 0.8*y[t-1] + rnorm(300,0,1)[t]} #kh có hệ số chặn
+plot(y)
+for (t in 2:300){y[t]<- 2 - 0.8*y[t-1] + rnorm(300,0,1)[t]}
+plot(y)
+acf(y)
+pacf(y)
+```
+###d.AR(1) bùng nổ
+```{r}
+for (t in 2:300){y[t]<- 1.1*y[t-1] + rnorm(300,0,1)[t]}
+plot(y)
+for (t in 2:300){y[t]<- -1.1*y[t-1] + rnorm(300,0,1)[t]}
+plot(y)
+```
+##5.3.2. Tự hồi quy bậc 2
+$Y_t={\phi}_1 Y_{t-1}+{\phi}_2 Y_{t-2}+u_t$
+###a.AR(2) không dừng
+```{r}
+for (t in 3:300){y[t]<- 0.6*y[t-1] + 0.4*y[t-2] + rnorm(300,0,1)[t]}
+plot(y)
+acf(y)
+pacf(y)
+```
+###b.AR(2) dừng, nghiệm ptrinh đảo là thực và phức
+```{r}
+for (t in 3:300){y[t]<- 3 + 0.3*y[t-1] + 0.4*y[t-2] + rnorm(300,0,1)[t]}
+plot(y)
+for (t in 3:300){y[t]<- 1.4*y[t-1] - 0.9*y[t-2] + rnorm(300,0,1)[t]}
+plot(y)
+```
+#5.4.Ước lượng và Dự báo
+```{r}
+library(readxl)
+library(tseries)
+#VN_CPI_IMF <- read_excel("E:/TimeSeries/Data/Data/VN_CPI_IMF.xlsx")
+attach(VN_CPI_IMF)
+```
+##5.4.1 Mô hình MA(1)
+```{r}
+reg.ma1<-arma(d.v1,order = c(1,1))
+summary(reg.ma1)
+round(resid(reg.ma1),2)
+```
+##5.4.2 Mô hình MA(2)
+```{r}
+reg.ma2<-arma(cpi,order = c(0,2))
+summary(reg.ma2)
+round(resid(reg.ma2),2)
+```
+##5.4.3 Mô hình AR(1)
+```{r}
+reg.ar1<-arma(cpi,order = c(1,0))
+summary(reg.ar1)
+round(fitted(reg.ar1),2)
+```
+##5.4.4 Mô hình AR(2)
+```{r}
+reg.ar2<-arma(cpi,order = c(2,0))
+summary(reg.ar2)
+round(fitted(reg.ar2),2)
+```
+##5.4.5 Mô hình ARMA(1,1)
+```{r}
+reg.arma11<-arma(cpi,order = c(1,1))
+summary(reg.arma11)
+round(resid(reg.arma11),2)
+```
+##5.4.6 Ước lượng bằng pp hợp lí tối đa (Maximum Likelihood)
+```{r}
+# dùng lệnh arima, kết quả dạng hiệu chỉnh về trung bình
+arima(cpi,order = c(1,0,0))
+arima(cpi,order = c(2,0,0))
+arima(cpi,order = c(1,0,1))
+```
+##5.4.7 Dự báo tự động
+###a.Xác định bậc qua ACF,PACF
+```{r}
+acf(cpi,plot = FALSE)
+pacf(cpi)
+```
+###b. Dự báo tự động cho 5 kì tiếp theo
+```{r}
+reg.arima=arima(cpi,order = c(14,0,14))
+cpif.arma=forecast(reg.arima,h=5)
+cpif.arma
+autoplot(cpif.arma)
+summary(reg.arima)
+```
+##5.4.8 Ước lượng mô hình ARMA bậc không liên tục
+```{r}
+summary(arima(cpi, order = c(2,0,2), fixed = c(0,NA,0,NA,NA)))
+summary(arima(cpi, order = c(3,0,2), fixed = c(NA,0,NA,NA,NA,NA)))
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

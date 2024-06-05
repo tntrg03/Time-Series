@@ -1,0 +1,102 @@
+---
+title: "BTVN_15/3"
+author: "tntrg_03"
+date: "2024-03-20"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(foreign)
+library(car)
+library(lmtest)
+library(zoo)
+library(sandwich)
+library(survival)
+library(AER)
+library(stargazer)
+library(ggplot2)
+library(caret)
+library(caTools)
+library(readxl)
+library(Metrics)
+library(TTR)
+library(htmltools)
+library(tsutils)
+library(urca)
+library(forecast)
+library(readxl)
+stockPVS <-read.csv("E:/Time Series/BTL/stockPVS.csv")
+Gr8 <- read_excel("E:/Time Series/BTL/Gr8.xlsx")
+attach(stockPVS)
+attach(Gr8)
+```
+
+
+# Có xu thế
+```{r}
+summary(ur.df(close_PVS,type = "trend"))
+summary(ur.df(log_return,type ="trend"))
+```
+# Có hệ số chặn
+```{r}
+summary(ur.df(close_PVS,type = "drift",lag=0))
+summary(ur.df(log_return,type ="drift",lag=0))
+```
+# None
+```{r}
+summary(ur.df(close_PVS,type = "none"))
+summary(ur.df(log_return,type ="none"))
+```
+
+```{r}
+acf(diff(close_PVS))
+pacf(diff(close_PVS))
+acf(log_return)
+pacf(log_return)
+forecast:::auto.arima(close_PVS,ic="aic")
+forecast:::auto.arima(log_return,ic = "aic")
+```
+```{r}
+PVS_arima212 <- Arima(close_PVS, order = c(2,1,2), include.constant = TRUE)
+summary(PVS_arima212)	
+autoplot(PVS_arima212)
+checkresiduals(PVS_arima212)
+PVS_arima712 <- Arima(close_PVS, order = c(7,1,2), include.constant = TRUE)
+summary(PVS_arima712)
+autoplot(PVS_arima712)
+checkresiduals(PVS_arima712)
+```
+```{r}
+lr_arima202 <- Arima(log_return, order = c(2,0,2), include.constant = TRUE)
+summary(lr_arima202)	
+autoplot(lr_arima202)
+checkresiduals(lr_arima202)
+```
+# Dự báo 
+```{r}
+PVSf.arima212<-forecast(PVS_arima212,h=2)
+PVSf.arima212
+lrf.arima202<-forecast(lr_arima202,h=2)
+lrf.arima202
+```
+```{r}
+summary(ca.jo(data.frame(PVC,PVG,PVS),type = "trace"))
+summary(ur.df(diff(PVS), type = "none"))
+summary(ur.df(diff(PVG), type = "none"))
+summary(ur.df(diff(PVC), type = "none"))
+```
+=>PVG,PVS,PVC ~I(1)
+```{r}
+reg1<-lm(PVC~PVG)
+summary(reg1)
+```
+```{r}
+resid<-residuals(reg1)
+summary(ur.df(resid, type = "none"))
+```
+
+

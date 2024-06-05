@@ -1,0 +1,317 @@
+---
+title: "Bai1_Solieutheothoigian"
+author: "huhu"
+date: "2024-01-04"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(zoo)
+library(car)
+library(carData)
+library(lmtest)
+library(tseries)
+library(urca)
+library(ggplot2)
+library(forecast)
+library(TTR)
+library(Metrics)# tính RMSE,MAPE
+library(tsutils)# tạo biến giả mùa vụ (phải cài thêm package 'greybox')
+library(Hmisc)
+```
+```{r}
+library(readxl)
+VN_GDP_2020 <-read_excel("Data/Data/VN_GDP_2020.xlsx")
+```
+
+```{r}
+# Xem,sửa,nhập số liệu
+edit(VN_GDP_2020)
+```
+```{r}
+# Lưu dưới dạng file của R
+##save(VN_GDP_2020,file = "VN_GDP2020.rda")
+attach(VN_GDP_2020)
+
+```
+
+```{r}
+# Định dạng số liệu theo tgian
+ts(VN_GDP_2020,start = c(2004,1),frequency = 4)
+gdp1<-ts(gdp1[1:68],start = c(2004,1),frequency = 4)
+# đồ thị
+plot.ts(gdp1)
+plot.ts(gdp2)
+
+```
+```{r}
+#biến trễ
+gdp1.l1<-lag(gdp1,1)
+#gdp1.l1<-ts(gdp1.l1[2:68],start = c(2004,1),frequency = 4)
+gdp1.lead1<-lag(gdp1,-1)
+#gdp1.lead1<-ts(gdp1.lead1[1:68],start = c(2004,1),frequency = 4)
+data1<-cbind(gdp1,gdp1.l1,gdp1.lead1)
+data1
+```
+```{r}
+library(Hmisc)
+r.gdp1<-(gdp1-lag(gdp1,4))/lag(gdp1,4)*100
+r.gdp1<-ts(r.gdp1,start = c(2005,1),frequency = 4)
+r1.gdp1<-(gdp1-lag(gdp1,1))/lag(gdp1,1)*100
+r1.gdp1<-ts(r1.gdp1,start = c(2004,2),frequency = 4)
+lr.gdp1<-log(gdp1/lag(gdp1,4))*100
+lr.gdp1<-ts(lr.gdp1,start = c(2005,1),frequency = 4)
+data2<-cbind(gdp1,r.gdp1,r1.gdp1,lr.gdp1)
+data2
+```
+
+```{r}
+gdp1<-gdp1[1:68]
+gdp2<-gdp2[1:68]
+cor(gdp1,gdp2)
+# Kiểm định đa cộng tuyến(sự tương quan)
+cor.test(gdp1,gdp2)
+
+```
+```{r}
+# Kiểm định tự tương quan, Psai của sai số
+library(lmtest)
+reg<-lm(gdp1~gdp2)
+summary(reg)
+durbinWatsonTest(reg)
+bptest(reg)
+```
+```{r}
+# Tạo biến xu thế
+time <- seq_along(gdp1)
+summary(time)
+```
+```{r}
+plot(time,gdp1,type="l",lwd=3)
+abline(lm(gdp1~time),col="green",lwd=3)
+
+# Hàm linear-linear
+reg421<-lm(gdp1~time)
+summary(reg421)
+```
+```{r}
+# Linear-log
+reg413<-lm(gdp1~log(time))
+summary(reg413)
+plot.ts(gdp1,lwd=2)
+lines(fitted(reg413),lwd=2, col = "blue")
+
+```
+```{r}
+#Log-Linear
+reg414 <- lm(log(gdp1)~time)
+summary(reg414)
+plot.ts(gdp1,lwd = 2)
+lines(exp(fitted(reg414)),lwd = 2, col = "red")
+gdpf3<-exp(fitted(reg414))
+rsq3<-sum((gdpf3-mean(gdp1))^2)/sum((gdp1-mean(gdp1))^2)
+rsq3<-sum((gdp1-gdpf3)^2)
+```
+```{r}
+# Hàm Log-Log
+reg415 <- lm(log(gdp1)~log(time))
+summary(reg415)
+plot.ts(gdp1,lwd=2)
+lines(exp(fitted(reg414)), col = "lightgreen",lwd=2)
+```
+
+
+```{r}
+# Tính RMSE,MAPE
+library(Metrics)
+rmse(gdp1,fitted(reg413))
+rmse(gdp1,fitted(reg421))
+rmse(gdp1,exp(fitted(reg414)))
+rmse(gdp1,exp(fitted(reg415)))
+
+
+mape(gdp1,fitted(reg413))
+mape(gdp1,fitted(reg421))
+mape(gdp1,exp(fitted(reg414)))
+mape(gdp1,exp(fitted(reg415)))
+```
+```{r}
+# Tạo biến giả mùa vụ theo quý
+library(tsutils)
+s1 <- c(rep(c(1,0,0,0), 17))				
+s2 <- c(rep(c(0,1,0,0), 17))
+s3 <- c(rep(c(0,0,1,0), 17))
+s4 <- c(rep(c(0,0,0,1), 17))
+seas <- seasdummy(68,4)# tạo biến giả tự động, chọn thuộc tính đầu tiên là phạm trụ cơ sở
+```
+```{r}
+# Hồi quy với biến giả mùa vụ
+reg42b<-lm(gdp1~s2+s3+s4)
+reg42a<-lm(gdp1~seas)
+library(stargazer)
+stargazer(reg42a,reg42b,type = "text")
+```
+### Xu thế thời gian tuyến tính + mùa vụ
+-Dạng cộng:
+```{r}
+summary(lm(gdp1~time+s2+s3+s4))
+summary(lm(gdp1~time+seas))
+```
+-Dạng nhân:
+```{r}
+summary(lm(gdp1~time+time*s2+time*s3+time*s4))
+```
+### Xu thế thời gian không tuyến tính, mùa vụ
+-Dạng cộng:
+```{r}
+summary(lm(log(gdp1)~time+s2+s3+s4))
+```
+-Dạng nhân:
+```{r}
+summary(lm(log(gdp1)~time+time*s2+time*s3+time*s4))
+```
+## 4.3 San chuỗi và hiệu chỉnh mùa vụ
+### 1.Trung bình trượt
+```{r}
+#Trung bình trượt 3 thời kỳ
+gdp1.ma3<-ma(gdp1,order = 3,centre = TRUE)
+ # từ đó có thể tạo chuỗi loại bỏ xu thế (detrended)
+gdp1.dema3<-gdp1-gdp1.ma3
+```
+
+```{r}
+
+```
+
+### 2.Phân tích thành phần dạng cộng
+```{r}
+gdp1<-ts(gdp1,start = c(2004,1),frequency = 4)
+decom.gdp1.a<-decompose(gdp1,type = "additive")
+plot(decom.gdp1.a)
+```
+```{r}
+# Lưu các thành phần xu thế,mùa vụ,ngẫu nhiên
+gdp1.trend.a<-decom.gdp1.a$trend
+gdp1.seas.a<-decom.gdp1.a$seasonal
+gdp1.rand.a<-decom.gdp1.a$random
+gdp1.trendseas.a<-gdp1-gdp1.rand.a
+
+```
+```{r}
+# Đồ thị chuỗi xu thế+mùa vụ
+plot(gdp1,lwd=2)
+lines(ma(gdp1,order = 4,centre = TRUE),col="green",lwd=2)
+lines(gdp1.trend.a,col="red",lwd=2)
+lines(gdp1.trendseas.a,col="blue",lwd=2)
+#có thể thấy chuỗi xu thế và ma(4) gần như trùng nhau
+```
+```{r}
+# Xem bộ trọng số (hệ số mùa vụ)
+gdp1.weight.a<-gdp1.trendseas.a-gdp1.trend.a
+print(gdp1.weight.a)
+```
+```{r}
+#hồi quy phần xu thế theo thời gian
+summary(lm(gdp1.trend.a~time))
+summary(lm(log(gdp1.trend.a)~time))
+```
+```{r}
+# dự báo
+gdp.trend.q1.2021= -52.3+23.79*69
+gdp.seas.q1.2021=-158.84091
+gdp.q1.2021=gdp.trend.q1.2021+gdp.seas.q1.2021
+```
+
+### 3.Phân tích thành phần dạng nhân(multiplicative)
+```{r}
+decom.gdp1.m<-decompose(gdp1,type = "m")
+plot(decom.gdp1.m)
+gdp1.trend.m <- decom.gdp1.m$trend
+gdp1.seas.m <- decom.gdp1.m$seasonal
+gdp1.rand.m <- decom.gdp1.m$random
+gdp1.trendseas.m <- gdp1/gdp1.rand.m
+plot(gdp1,lwd=2)
+lines(gdp1.trendseas.m,col="red")
+```
+```{r}
+#hệ số mùa vụ
+gdp1.weight.m<-gdp1.trendseas.m/gdp1.trend.m
+#gdp1.seas.m-gdp1.weight.m
+print(gdp1.weight.m)
+```
+```{r}
+summary(lm(gdp1.trend.m~time))
+```
+```{r}
+gdp.trend.q1.2021= -52.3+23.79*69
+gdp.seas.q1.2021=0.81
+gdp.q1.2021=gdp.trend.q1.2021*gdp.seas.q1.2021
+```
+
+
+## 4.4 Holt-Winter 
+### 1.có mùa vụ dạng cộng
+```{r}
+hw.gdp.a<-HoltWinters(gdp1,seasonal = "a")
+hw.gdp.a
+plot(gdp1,lwd=2)
+lines(fitted(hw.gdp.a)[,1],col="blue")
+length(fitted(hw.gdp.a)[,1])
+```
+### 2.Có mùa vụ dạng nhân
+```{r}
+hw.gdp.m<-HoltWinters(gdp1,seasonal = "m")
+hw.gdp.m
+plot(gdp1,lwd=2)
+lines(fitted(hw.gdp.m)[,1],col="red")
+```
+##Dự báo cho quý 1 Năm 2021
+
+```{r}
+
+gdp1ses=ses(gdp1,h=1)
+summary(gdp1ses)
+```
+```{r}
+gdp1h=hw(gdp1,h=1,seasonal = "additive")
+summary(gdp1h)
+```
+```{r}
+gdp1hw=hw(gdp1,h=1,seasonal = "multiplicative")
+summary(gdp1hw)
+```
+
+
+```{r}
+time2<-time^2
+summary(lm(gdp1~time+time2))
+reg_quar<-lm(gdp1~time+time2)
+rmse(gdp1,fitted(reg_quar))
+plot(gdp1,lwd=2)
+gdp2<-ts(fitted(reg_quar),start = c(2004,1),frequency = 4)
+lines(gdp2,col="red",lwd=2)
+```
+### Dự báo theo MA(3)
+```{r}
+gdpma3<-ma(gdp1,order = 3,centre = FALSE)
+regma3<-lm(gdpma3~time)           
+summary(regma3)
+# dự báo 
+#gdpma3_q1_2021=-43,174+23,621*t
+gdpma3_q1_2021=-43.174+23.621*69
+gdpma3_q1_2021
+# Suy ra gdp_q1_2021
+gdp_q1_2021=3*gdpma3_q1_2021-gdp1[68]-gdp1[67]
+gdp_q1_2021
+```
+
+
+
+
+
+
+

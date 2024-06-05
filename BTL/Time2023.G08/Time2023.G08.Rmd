@@ -1,0 +1,222 @@
+---
+title: "BTN"
+author: "GR8"
+date: "2024-01-04"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+```{r}
+library(foreign)
+library(car)
+library(lmtest)
+library(zoo)
+library(sandwich)
+library(survival)
+library(AER)
+library(stargazer)
+library(ggplot2)
+library(caret)
+library(caTools)
+library(readxl)
+library(Metrics)
+library(TTR)
+library(htmltools)
+library(tsutils)
+library(urca)
+library(forecast)
+library(readxl)
+library(MASS)
+library(strucchange)
+
+Gr8 <- read_excel("E:/Time Series/BTL/Gr8.xlsx")
+save(Gr8,file="gr8.rda")
+stockPVG <- read.csv("E:/Time Series/BTL/TTH/Daily_Data.csv")
+stockPVS <-read.csv("E:/Time Series/BTL/TNTT/stockPVS.csv")
+stockPVC <-read_excel("E:/Time Series/BTL/DL/dataPVCprice.xlsx")
+attach(Gr8)
+time=seq_along(Gr8)
+PVS<-ts(PVS,start=c(1,1),frequency=1)
+PVC<-ts(PVC,start=c(1,1),frequency=1)
+PVG<-ts(PVG,start=c(1,1),frequency=1)
+```
+
+#1. Tính cov,cor của 3 chuỗi giá và 3 chuỗi log-return
+
+```{r}
+attach(Gr8)
+datastock<-data.frame(PVS,PVG,PVC)
+as.data.frame(datastock)
+cov(datastock)
+cor(datastock)
+plot(seq_along(PVG),PVG,type = "l",col = "blue",xlab="Time",ylab= "Stock price")
+lines(seq_along(PVG),PVG,type = "l",col ="red")
+lines(seq_along(PVC),PVC,type = "l",col ="green")
+```
+
+```{r}
+attach(datastock)
+rPVS<-diff(log(PVS))*100
+rPVG<-diff(log(PVG))*100
+rPVC<-diff(log(PVC))*100
+rPVS = ts(rPVS,start = 1,frequency = 1)
+rPVG = ts(rPVG,start = 1,frequency = 1)
+rPVC = ts(rPVC,start = 1,frequency = 1)
+data1 <- data.frame(rPVS, rPVG, rPVC)
+```
+```{r}
+cov(data1)
+cor(data1)
+```
+# 2.Kiểm định đồng tích hợp giữa các chuỗi giá
+## Kiểm định với tiêu chí Trace
+$$
+\begin{cases}
+H_0: \ r=0:\ không\ có\ mối\ quan\ hệ\ đồng\ tích\ hợp \\ 
+H_1: \ r≠0:\ có\ ít\ nhất\ một\ mối\ quan\ hệ\ đồng\ tích\ hợp
+\end{cases}
+$$
+
+```{r}
+summary(ca.jo(data.frame(PVC,PVG,PVS), type = "trace"))
+```
+Thống kê kiểm định: LR = 25.82 < Giá trị tới hạn 5%, 10%, 1%
+=> Chưa bác bỏ Ho => Không có mối quan hệ đồng tích hợp giữa 3 chuỗi giá 
+## Kiểm định với tiêu chí “eigen value”
+```{r}
+summary(ca.jo(data.frame(PVC,PVG,PVS), type = "eigen"))
+```
+Thống kê kiểm định: LR = 15.21 < Giá trị tới hạn 5%, 10%, 1%
+=> Chưa bác bỏ Ho => Không có mối quan hệ đồng tích hợp giữa 3 chuỗi giá 
+
+Vậy Kiểm định 2 tiêu chí đều cho số mối quan hệ đồng tích bằng 0
+# 3.Xác định bậc trễ
+```{r}
+library(vars)
+VARselect(data1)
+```
+
+# 4.Ước lượng mô hình VAR
+```{r}
+var1= VAR(data1, p=1, type = "const")
+summary(var1)
+```
+## Kiểm định phần dư
+
+```{r}
+serial.test(var1)
+```
+
+# 5.Tính các hàm phản ứng và phân rã phương sai
+## Dự báo Var1
+
+
+```{r}
+forecast1 <-predict(var1)
+forecast1
+plot(forecast1)
+```
+##Hàm phản ứng (impulse response function)
+```{r}
+
+irf(var1)
+plot(irf(var1))
+
+```
+##Phân rã phương sai(forecast error variance decomposition – fevd)
+```{r}
+
+fevd(var1)
+plot(fevd(var1))
+```
+
+#6.Dự báo cho từng chuỗi log_return theo VAR
+
+```{r}
+
+rPVS.forecast1 = forecast1$fcst$rPVS[,1]
+
+rPVG.forecast1 = forecast1$fcst$rPVG[,1]
+
+rPVC.forecast1 = forecast1$fcst$rPVC[,1]
+#rPVC.forecast12 = rPVC[497] + cumsum(rPVC.forecast1[1:10,1])
+rPVS.forecast1
+rPVG.forecast1
+rPVC.forecast1
+```
+## Chuỗi PVS
+```{r}
+TL<-exp(rPVS.forecast1)
+pvs2024<- stockPVS$close[499:508]
+n1<-TL[1]*close_PVS[498]
+n2<-TL[2]*pvs2024[2]
+n3<-TL[3]*pvs2024[3]
+n4<-TL[4]*pvs2024[4]
+n5<-TL[5]*pvs2024[5]
+n6<-TL[6]*pvs2024[6]
+n7<-TL[7]*pvs2024[7]
+n8<-TL[8]*pvs2024[8]
+n9<-TL[9]*pvs2024[9]
+n10<-TL[10]*pvs2024[10]
+pricePVSf<-cbind(n1,n2,n3,n4,n5,n6,n7,n8,n9,n10)
+paste("Giá trị dự báo giá cổ phiếu 10 ngày đầu năm 2024 ")
+pricePVSf
+paste("Sai số dự báo")
+mape(pricePVSf,pvs2024)
+```
+## Chuỗi PVG
+```{r}
+TL<-exp(rPVG.forecast1)
+pvg2024<- stockPVG$X2024_price[1:10]
+n1<-TL[1]*stockPVG$Price[498]
+n2<-TL[2]*pvg2024[2]
+n3<-TL[3]*pvg2024[3]
+n4<-TL[4]*pvg2024[4]
+n5<-TL[5]*pvg2024[5]
+n6<-TL[6]*pvg2024[6]
+n7<-TL[7]*pvg2024[6]
+n8<-TL[8]*pvg2024[7]
+n9<-TL[9]*pvg2024[9]
+n10<-TL[10]*pvg2024[10]
+pricePVGf<-cbind(n1,n2,n3,n4,n5,n6,n7,n8,n9,n10)
+paste("Giá trị dự báo giá cổ phiếu 10 ngày đầu năm 2024 ")
+pricePVGf
+paste("Sai số dự báo")
+mape(pricePVGf,pvg2024)
+```
+##Chuỗi PVC
+
+```{r}
+TL<-exp(rPVC.forecast1)
+pvc2024<- stockPVC$Price[499:508]
+n1<-TL[1]*stockPVC$Price[498]
+n2<-TL[2]*pvc2024[2]
+n3<-TL[3]*pvc2024[3]
+n4<-TL[4]*pvc2024[4]
+n5<-TL[5]*pvc2024[5]
+n6<-TL[6]*pvc2024[6]
+n7<-TL[7]*pvc2024[6]
+n8<-TL[8]*pvc2024[7]
+n9<-TL[9]*pvc2024[9]
+n10<-TL[10]*pvc2024[10]
+pricePVCf<-cbind(n1,n2,n3,n4,n5,n6,n7,n8,n9,n10)
+paste("Giá trị dự báo giá cổ phiếu 10 ngày đầu năm 2024 ")
+pricePVCf
+paste("Sai số dự báo")
+mape(pricePVCf,pvc2024)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
