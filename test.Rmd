@@ -1,0 +1,286 @@
+---
+title: "Test"
+author: "Truong Ngoc Thuy Trang - 11217004"
+date: "2024-04-14"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(foreign)
+library(car)
+library(lmtest)
+library(zoo)
+library(sandwich)
+library(survival)
+library(AER)
+library(stargazer)
+library(ggplot2)
+library(caret)
+library(caTools)
+library(readxl)
+library(Metrics)
+library(TTR)
+library(htmltools)
+library(tsutils)
+library(urca)
+library(forecast)
+library(readxl)
+library(MASS)
+library(strucchange)
+library(Hmisc)
+Data_Test_2024 <- read_excel("E:/Time Series/Data_Test_2024.xlsx")
+attach(Data_Test_2024)
+```
+
+#Gán ts
+```{r}
+v1=ts(v1,start = c(2007,1),frequency = 4)
+v2=ts(v2,start = c(2007,1),frequency = 4)
+v3=ts(v3,start = c(2007,1),frequency = 4)
+v4=ts(v4,start = c(2007,1),frequency = 4)
+```
+
+#mean,var
+```{r}
+mean(v1)
+mean(v2)
+mean(v3)
+mean(v4)
+var(v1)
+quantile(v1,probs=0.75)
+```
+
+
+#Cor,cov
+```{r}
+cor(v2,v3)
+cov(Data_Test_2024[2:5])
+```
+#Kiểm định sự tương quan
+```{r}
+cor.test(v1,v2) # bb H0,có tương quan
+cor.test(v1,v3)  # bb H0,có tương quan
+cor.test(v1,v4) # bb H0,có tương quan
+cor.test(v2,v3) # bb H0,có tương quan
+cor.test(v2,v4) # bb H0,có tương quan
+cor.test(v3,v4) # bb H0,có tương quan
+```
+#plot
+```{r}
+plot(v1,type="l")
+plot(v2,type="l")
+plot(v3,type="l")
+plot(v4,type="l")
+```
+#Tăng trưởng so với cùng kỳ năm trước
+```{r}
+r.v1=((v1-Lag(v1,4))/Lag(v1,4))*100
+r.v2=((v2-Lag(v2,4))/Lag(v2,4))*100
+r.v3=((v3-Lag(v3,4))/Lag(v3,4))*100
+r.v4=((v4-Lag(v4,4))/Lag(v4,4))*100
+```
+
+#Tăng trưởng so với kỳ trước
+```{r}
+r1.v1=((v1-Lag(v1,1))/Lag(v1,1))*100
+r1.v2=((v2-Lag(v2,1))/Lag(v2,1))*100
+r1.v3=((v3-Lag(v3,1))/Lag(v3,1))*100
+r1.v4=((v4-Lag(v4,1))/Lag(v4,1))*100
+```
+
+#Log-return
+```{r}
+lr.v1=log(v1/Lag(v1,4))*100
+lr.v2=log(v2/Lag(v2,4))*100
+lr.v3=log(v3/Lag(v3,4))*100
+lr.v4=log(v4/Lag(v4,4))*100
+```
+
+#Sai phân
+```{r}
+d.v1=diff(v1)
+d.v2=diff(v2)
+d.v3=diff(v3)
+d.v4=diff(v4)
+acf(d.v1)
+```
+
+
+
+#plot lr
+```{r}
+plot(d.v1)
+```
+```{r}
+time=seq_along(v1)
+s1 <- c(rep(c(1,0,0,0), 15),1,0,0)
+s2 <- c(rep(c(0,1,0,0), 15),0,1,0)
+s3 <- c(rep(c(0,0,1,0), 15),0,0,1)
+s4 <- c(rep(c(0,0,0,1), 15),0,0,0)
+
+```
+#Hồi quy tt theo tgian
+```{r}
+regv1=lm(log(v1)~log(time))
+summary(regv1)
+rmse(v1,exp(regv1$fitted.values))
+```
+#Dự báo q4/2024
+```{r}
+v1.q4.2024=regv1$coefficients[1]+regv1$coefficients[2]*64+regv1$coefficients[5]
+v1.q4.2024
+```
+#sai so
+```{r}
+rmse(v1,regv1$fitted.values)
+mape(v1,regv1$fitted.values)
+```
+#Kiểm định ADF cho chuỗi lr.v1, có xu thế, lag=1
+```{r}
+summary(ur.df(v1,type = "trend"))
+```
+v1 dừng xu thế=>loại bỏ xu thế, lấy phần dư kđinh lại
+```{r}
+tt=seq_along(lr.v1[5:63])
+lm1=lm(lr.v1[5:63]~tt)
+summary(lm1)
+e.v1=lm1$residuals
+summary(ur.df(e.v1,type = "drift", lag = 1))
+plot.ts(e.v1)
+```
+
+
+
+
+
+```{r}
+acf(lr.v1[5:63])
+pacf(lr.v1[5:63])
+```
+#Mô hình ARIMA(1,0,1) cho d.v1 có hệ số chặn
+```{r}
+v1_arima=Arima(v1,order = c(1,1,1),include.constant = TRUE)
+summary(v1_arima)
+dv1=v1_arima$residuals
+library(rugarch)
+garch11 <- garch(dv1,order = c(1,1))
+summary(garch11)
+```
+```{r}
+v1_arima=arma(d.v1,order = c(1,1))
+summary(v1_arima)
+```
+
+```{r}
+v1_arima=Arima(v1,order = c(1,1,1),include.constant = TRUE)
+summary(v1_arima)
+vf1=forecast(v1_arima,h=10)
+vf1
+```
+
+```{r}
+reg3<-HoltWinters(v1,seasonal = "a")
+reg3
+```
+
+```{r}
+tgarchmodel1 <- ugarchspec(variance.model=list(model="gjrGARCH",garchOrder=c(1,1)), mean.model=list(armaOrder=c(1,1)))
+tgarchfit1 <- ugarchfit(tgarchmodel1, d.v1)
+tgarchfit1
+```
+```{r}
+reg.dv1.sar1_12 <- arima(d.v1,order = c(1,0,0), seasonal = list(order = c(1,0,0), period = 4))
+summary(reg.dv1.sar1_12)                         
+```
+
+
+# dự báo
+```{r}
+v1f=forecast(v1_arima,h=1)
+v1f
+#giá trị q4.2022
+exp(v1f$mean/100)*v1[60]
+```
+#Kiểm định đồng tích hợp
+
+```{r}
+summary(ca.jo(data.frame(v1,v2,v3,v4),type = "eigen"))
+```
+có đồng tích hợp
+#Kiểm định
+```{r}
+dth=(lm(v1~v2+v3))
+summary(dth)
+summary(ur.df(dth$residuals,type="none"))
+```
+#Mô hình hiệu chỉnh sai số
+```{r}
+length(dth$residuals)
+summary(lm(diff(v1)~diff(v2)+diff(v3)+dth$residuals[1:62]))
+```
+# Kiểm định nhân quả Granger
+```{r}
+grangertest(diff(v2),diff(v1),order = 1)
+grangertest(diff(v1),diff(v2),order = 1)
+```
+
+# VAR
+```{r}
+d.v1=diff(v1)
+d.v2=diff(v2)
+datavar=data.frame(d.v1,d.v2)
+library(vars)
+
+var1=VAR(datavar,p=1,type="const")
+summary(var1)
+```
+## kđ tự tương quan của phần dư
+```{r}
+serial.test(var1)
+```
+#Hàm phản ứng
+```{r}
+irf(var1)
+plot(irf(var1))
+```
+#Phân rã phương sai
+```{r}
+fevd(var1)
+```
+
+
+## dự báo diff từ VAR
+```{r}
+fcvar1=predict(var1,n.ahead = 1)
+fcvar1
+```
+```{r}
+v1_q4.2024=fcvar1$fcst$d.v1[1]+v1[63]
+v1_q4.2024
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
